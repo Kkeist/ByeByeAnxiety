@@ -395,13 +395,13 @@ class FocusWidget(QWidget):
         from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
         
         dialog = QDialog(self)
-        dialog.setWindowTitle("🎉 获得贴纸！")
+        dialog.setWindowTitle("🎉 Got stickers!")
         dialog.setMinimumWidth(400)
         
         layout = QVBoxLayout(dialog)
         
         # Title
-        title_label = QLabel(f"🎉 获得了 {len(drawn_stickers)} 张贴纸！")
+        title_label = QLabel(f"🎉 Got {len(drawn_stickers)} stickers!")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_label)
