@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QListWidget, QListWidgetItem, QLabel, QDialog,
                              QLineEdit, QTextEdit, QDateEdit, QCheckBox,
                              QDialogButtonBox, QMessageBox, QSplitter)
-from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtCore import Qt, QDate, QLocale
 from datetime import datetime
 
 from src.models import Person
@@ -46,6 +46,7 @@ class PersonDialog(QDialog):
         self.birthday_date.setCalendarPopup(True)
         self.birthday_date.setDate(QDate.currentDate())
         self.birthday_date.setEnabled(False)
+        self.birthday_date.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         self.birthday_check.stateChanged.connect(
             lambda state: self.birthday_date.setEnabled(state == Qt.CheckState.Checked.value)
         )

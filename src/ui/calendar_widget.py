@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QCalendarWidget,
                              QLabel, QListWidget, QListWidgetItem, QPushButton,
                              QDialog, QDialogButtonBox, QDateEdit, QTextEdit,
                              QFormLayout, QMessageBox)
-from PyQt6.QtCore import Qt, QDate, pyqtSignal
+from PyQt6.QtCore import Qt, QDate, pyqtSignal, QLocale
 from PyQt6.QtGui import QTextCharFormat, QColor
 from datetime import datetime, timedelta
 
@@ -36,12 +36,14 @@ class TaskScheduleDialog(QDialog):
         self.start_date = QDateEdit()
         self.start_date.setDate(QDate.currentDate())
         self.start_date.setCalendarPopup(True)
+        self.start_date.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         layout.addRow("Start Date:", self.start_date)
         
         # Due date
         self.due_date = QDateEdit()
         self.due_date.setDate(QDate.currentDate().addDays(1))
         self.due_date.setCalendarPopup(True)
+        self.due_date.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         layout.addRow("Due Date:", self.due_date)
         
         # Description
@@ -130,6 +132,8 @@ class CalendarWidget(QWidget):
         # Calendar
         self.calendar = QCalendarWidget()
         self.calendar.setMinimumWidth(350)
+        # Set locale to English to force weekday names in English
+        self.calendar.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         self.calendar.clicked.connect(self.date_selected)
         content.addWidget(self.calendar, 2)
         

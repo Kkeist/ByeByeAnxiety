@@ -1,7 +1,7 @@
 """Diary widget"""
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QTextEdit, QCalendarWidget, QLabel, QMessageBox)
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QLocale
 from PyQt6.QtGui import QTextCharFormat, QColor
 from datetime import datetime
 
@@ -34,6 +34,8 @@ class DiaryWidget(QWidget):
         left_layout.addWidget(QLabel("<h3>Diary</h3>"))
         
         self.calendar = QCalendarWidget()
+        # Set locale to English to force weekday names in English
+        self.calendar.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         self.calendar.clicked.connect(self.date_selected)
         self.calendar.setStyleSheet("""
             QCalendarWidget {

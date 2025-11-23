@@ -52,10 +52,36 @@ class SmartInputWidget(QTextEdit):
     
     def keyPressEvent(self, event):
         """Handle key press events"""
+        # Handle keyboard navigation in completion list
+        if self.completion_list.isVisible():
+            if event.key() == Qt.Key.Key_Up:
+                # Move selection up
+                current_row = self.completion_list.currentRow()
+                if current_row > 0:
+                    self.completion_list.setCurrentRow(current_row - 1)
+                return
+            elif event.key() == Qt.Key.Key_Down:
+                # Move selection down
+                current_row = self.completion_list.currentRow()
+                if current_row < self.completion_list.count() - 1:
+                    self.completion_list.setCurrentRow(current_row + 1)
+                return
+            elif event.key() == Qt.Key.Key_Return and not event.modifiers():
+                # Select current item
+                current_item = self.completion_list.currentItem()
+                if current_item:
+                    self.insert_completion(current_item)
+                    return
+            elif event.key() == Qt.Key.Key_Escape:
+                # Hide completion list
+                self.completion_list.hide()
+                return
+        
         if event.key() == Qt.Key.Key_Return and not event.modifiers():
-            # Send message on Enter
-            self.send_message()
-            return
+            # Send message on Enter (only if completion list is not visible)
+            if not self.completion_list.isVisible():
+                self.send_message()
+                return
         elif event.key() == Qt.Key.Key_Return and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
             # New line on Shift+Enter
             super().keyPressEvent(event)
@@ -107,139 +133,43 @@ class SmartInputWidget(QTextEdit):
         # If query is empty or very short, show default options including dates
         show_defaults = len(query_stripped) <= 1
         
-        # Dates and Diary - always show if query matches date patterns or is empty
-        from datetime import datetime, timedelta
+        # Tasks - filter by query
+        all_tasks = []
+        for category in ["today_must", "future_date", "long_term", "someday_maybe"]:
+            tasks = self.data_manager.get_tasks_by_category(category)
+            all_tasks.extend(tasks)
         
-        # Check if query matches date patterns
-        date_matched = False
-        parsed_date_str = None
+        for task in all_tasks:
+            # Filter by query - if query is empty, show all; otherwise filter
+            if not query_stripped or query_lower in task.title.lower():
+                items.append({
+                    'type': 'task',
+                    'id': task.id,
+                    'display': f"📋 {task.title}",
+                    'completion': f"task:{task.id}",
+                    'data': task
+                })
         
-        # Try to parse as date first
-        if query_stripped:
-            # Try different date formats
-            for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%m-%d', '%m/%d', '%d-%m', '%d/%m']:
-                try:
-                    if fmt in ['%m-%d', '%m/%d']:
-                        date_str = f"{datetime.now().year}-{query_stripped}"
-                    elif fmt in ['%d-%m', '%d/%m']:
-                        date_str = f"{datetime.now().year}-{query_stripped.split('-')[1] if '-' in query_stripped else query_stripped.split('/')[1]}-{query_stripped.split('-')[0] if '-' in query_stripped else query_stripped.split('/')[0]}"
-                    else:
-                        date_str = query_stripped
-                    parsed_date = datetime.strptime(date_str, fmt)
-                    parsed_date_str = parsed_date.strftime('%Y-%m-%d')
-                    date_matched = True
-                    break
-                except:
-                    continue
+        # Todo Lists - filter by query
+        todolists = self.data_manager.get_setting("todolists", [])
+        for todolist in todolists:
+            # Filter by query
+            if not query_stripped or query_lower in todolist.get('name', '').lower():
+                items.append({
+                    'type': 'todolist',
+                    'id': todolist['id'],
+                    'display': f"📚 {todolist.get('name', 'Unnamed')}",
+                    'completion': f"todolist:{todolist['id']}",
+                    'data': todolist
+                })
         
-        # Show date options if query matches date patterns or is empty
-        if show_defaults or date_matched or query_lower in ['today', 'tomorrow', 'diary', 'calendar', 'date']:
-            # Today
-            if show_defaults or query_lower in 'today' or (date_matched and parsed_date_str == datetime.now().strftime('%Y-%m-%d')):
-                today_str = datetime.now().strftime('%Y-%m-%d')
-                items.append({
-                    'type': 'calendar',
-                    'id': f'calendar:{today_str}',
-                    'display': f"📅 Calendar - Today ({today_str})",
-                    'completion': f"calendar:{today_str}",
-                    'data': today_str
-                })
-                items.append({
-                    'type': 'diary',
-                    'id': f'diary:{today_str}',
-                    'display': f"📔 Diary - Today ({today_str})",
-                    'completion': f"diary:{today_str}",
-                    'data': today_str
-                })
-            
-            # Tomorrow
-            if show_defaults or query_lower in 'tomorrow':
-                tomorrow = datetime.now() + timedelta(days=1)
-                tomorrow_str = tomorrow.strftime('%Y-%m-%d')
-                items.append({
-                    'type': 'calendar',
-                    'id': f'calendar:{tomorrow_str}',
-                    'display': f"📅 Calendar - Tomorrow ({tomorrow_str})",
-                    'completion': f"calendar:{tomorrow_str}",
-                    'data': tomorrow_str
-                })
-                items.append({
-                    'type': 'diary',
-                    'id': f'diary:{tomorrow_str}',
-                    'display': f"📔 Diary - Tomorrow ({tomorrow_str})",
-                    'completion': f"diary:{tomorrow_str}",
-                    'data': tomorrow_str
-                })
-            
-            # Parsed date
-            if date_matched and parsed_date_str:
-                items.append({
-                    'type': 'calendar',
-                    'id': f'calendar:{parsed_date_str}',
-                    'display': f"📅 Calendar - {parsed_date_str}",
-                    'completion': f"calendar:{parsed_date_str}",
-                    'data': parsed_date_str
-                })
-                items.append({
-                    'type': 'diary',
-                    'id': f'diary:{parsed_date_str}',
-                    'display': f"📔 Diary - {parsed_date_str}",
-                    'completion': f"diary:{parsed_date_str}",
-                    'data': parsed_date_str
-                })
-            
-            # Recent diary entries
-            if show_defaults or query_lower in ['diary', 'journal']:
-                today = datetime.now()
-                for i in range(7):  # Last 7 days
-                    date = today - timedelta(days=i)
-                    date_str = date.strftime('%Y-%m-%d')
-                    day_name = date.strftime('%A') if i == 0 else f"{date.strftime('%A')} ({i} days ago)"
-                    
-                    items.append({
-                        'type': 'diary',
-                        'id': date_str,
-                        'display': f"📔 Diary - {day_name} ({date_str})",
-                        'completion': f"diary:{date_str}",
-                        'data': date_str
-                    })
-        
-        # Tasks
-        if not show_defaults or query_stripped:
-            all_tasks = []
-            for category in ["today_must", "future_date", "long_term", "someday_maybe"]:
-                tasks = self.data_manager.get_tasks_by_category(category)
-                all_tasks.extend(tasks)
-            
-            for task in all_tasks:
-                if show_defaults or query_lower in task.title.lower():
-                    items.append({
-                        'type': 'task',
-                        'id': task.id,
-                        'display': f"📋 {task.title}",
-                        'completion': f"task:{task.id}",
-                        'data': task
-                    })
-        
-        # Todo Lists
-        if not show_defaults or query_stripped:
-            todolists = self.data_manager.get_setting("todolists", [])
-            for todolist in todolists:
-                if show_defaults or query_lower in todolist['name'].lower():
-                    items.append({
-                        'type': 'todolist',
-                        'id': todolist['id'],
-                        'display': f"📚 {todolist['name']}",
-                        'completion': f"todolist:{todolist['id']}",
-                        'data': todolist
-                    })
-        
-        # People from social book
-        if not show_defaults or query_stripped:
-            try:
-                people = self.data_manager.get_all_people()
+        # People from social book - filter by query
+        try:
+            people = self.data_manager.get_all_people()
+            if people:
                 for person in people:
-                    if show_defaults or query_lower in person.name.lower():
+                    # Filter by query - check name
+                    if not query_stripped or query_lower in person.name.lower():
                         items.append({
                             'type': 'person',
                             'id': person.id,
@@ -247,8 +177,11 @@ class SmartInputWidget(QTextEdit):
                             'completion': f"person:{person.id}",
                             'data': person
                         })
-            except:
-                pass  # Social book might not be implemented yet
+        except Exception as e:
+            # Social book might not be implemented yet, or error getting people
+            import traceback
+            print(f"Error getting people for mentions: {e}")
+            traceback.print_exc()
         
         return items[:15]  # Limit to 15 items
     
@@ -261,6 +194,10 @@ class SmartInputWidget(QTextEdit):
             list_item.setData(Qt.ItemDataRole.UserRole, item)
             self.completion_list.addItem(list_item)
         
+        # Select first item by default
+        if self.completion_list.count() > 0:
+            self.completion_list.setCurrentRow(0)
+        
         # Position the completion list
         cursor = self.textCursor()
         cursor.setPosition(at_pos)
@@ -270,6 +207,7 @@ class SmartInputWidget(QTextEdit):
         global_pos = self.mapToGlobal(rect.bottomLeft())
         self.completion_list.move(global_pos)
         self.completion_list.show()
+        # Don't set focus on completion list - keep focus on input for typing
     
     def insert_completion(self, item):
         """Insert selected completion - insert friendly name but store code for parsing"""

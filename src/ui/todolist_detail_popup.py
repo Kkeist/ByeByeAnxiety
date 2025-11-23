@@ -12,6 +12,7 @@ class TodoListDetailPopup(QDialog):
     
     todolist_updated = pyqtSignal(str)  # todolist_id
     task_completed = pyqtSignal(str)    # task_id
+    task_uncompleted = pyqtSignal(str)  # task_id
     
     def __init__(self, todolist_data, data_manager, parent=None):
         super().__init__(parent)
@@ -313,14 +314,17 @@ class TodoListDetailPopup(QDialog):
     
     def toggle_task(self, task, state):
         """Toggle task completion"""
+        was_completed = task.completed
         task.completed = (state == Qt.CheckState.Checked.value)
+        
         if task.completed:
             task.mark_complete()
+            self.data_manager.save_task(task)
+            self.task_completed.emit(task.id)
         else:
             task.mark_incomplete()
-        
-        self.data_manager.save_task(task)
-        self.task_completed.emit(task.id)
+            self.data_manager.save_task(task)
+            self.task_uncompleted.emit(task.id)
         
         # Refresh display
         self.load_tasks()

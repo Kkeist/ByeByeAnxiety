@@ -10,6 +10,7 @@ class DraggableTaskItem(QWidget):
     """A draggable task item widget"""
     
     task_completed = pyqtSignal(str)  # task_id
+    task_uncompleted = pyqtSignal(str)  # task_id
     task_clicked = pyqtSignal(str)    # task_id
     
     def __init__(self, task: Task, parent=None):
@@ -93,13 +94,17 @@ class DraggableTaskItem(QWidget):
         self.task.completed = (state == Qt.CheckState.Checked.value)
         
         # Update visual style
+        was_completed = self.task.completed
         if self.task.completed:
             self.title_label.setStyleSheet("text-decoration: line-through; color: #95a5a6;")
         else:
             self.title_label.setStyleSheet("color: #2c3e50;")
         
-        # Emit signal
-        self.task_completed.emit(self.task.id)
+        # Emit appropriate signal
+        if self.task.completed:
+            self.task_completed.emit(self.task.id)
+        else:
+            self.task_uncompleted.emit(self.task.id)
     
     def mousePressEvent(self, event):
         """Handle mouse press for drag start"""

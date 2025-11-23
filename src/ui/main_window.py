@@ -384,6 +384,7 @@ class MainWindow(QMainWindow):
         popup = TodoListDetailPopup(todolist_data, self.data_manager, self)
         popup.todolist_updated.connect(self.refresh_all_todolists)
         popup.task_completed.connect(self.on_task_completed)
+        popup.task_uncompleted.connect(self.on_task_uncompleted)
         
         # Position popup
         popup.move(self.x() + 50, self.y() + 50)
@@ -466,6 +467,7 @@ class MainWindow(QMainWindow):
         # Todo tab
         self.todo_widget = TodoWidget(self.data_manager)
         self.todo_widget.task_completed.connect(self.on_task_completed)
+        self.todo_widget.task_uncompleted.connect(self.on_task_uncompleted)
         self.todo_widget.task_deleted.connect(self.on_task_deleted)
         tabs.addTab(self.todo_widget, "📋 Tasks")
         
@@ -712,21 +714,128 @@ class MainWindow(QMainWindow):
             task = next((t for t in all_tasks if t.title == task_identifier), None)
         
         if not task:
-            # Fallback to simple message
-            if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
-                self.anxiety_killer_widget.send_proactive_message(
-                    f"🎉 Great job completing your task! Every step forward counts!"
-                )
             return
         
-        # Show encouragement from Anxiety Killer
+        # Let AI generate a personalized praise message
         if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
-            self.anxiety_killer_widget.send_proactive_message(
-                f"🎉 Great job completing '{task.title}'! Every step forward counts!"
-            )
+            self.generate_task_completion_praise(task)
         
         # Check if any todolist is now complete
         self.check_todolist_completion(task.id)
+    
+    def on_task_uncompleted(self, task_identifier: str):
+        """Handle task uncompletion - when user unchecks a completed task"""
+        # Try to get task by ID first, then by title
+        task = None
+        if len(task_identifier) > 10:  # Likely an ID (timestamp-based)
+            task = self.data_manager.get_task(task_identifier)
+        else:
+            # Try to find by title
+            all_tasks = []
+            for category in ["today_must", "future_date", "long_term", "someday_maybe"]:
+                tasks = self.data_manager.get_tasks_by_category(category)
+                all_tasks.extend(tasks)
+            task = next((t for t in all_tasks if t.title == task_identifier), None)
+        
+        if not task:
+            return
+        
+        # Let AI generate an encouraging message (not praise, but encouragement)
+        if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
+            self.generate_task_uncompletion_encouragement(task)
+    
+    def generate_task_completion_praise(self, task):
+        """Generate AI praise for task completion"""
+        import asyncio
+        from PyQt6.QtCore import QTimer
+        
+        # Prepare context for AI
+        praise_prompt = f"""The user just completed a task: "{task.title}"
+
+Please generate a brief, warm, and personalized praise message (under 50 words) celebrating this achievement. 
+Be specific about the task and make it feel genuine and encouraging. 
+Use emojis if appropriate, but keep it natural and heartfelt."""
+
+        # Use QTimer to schedule async call
+        QTimer.singleShot(0, lambda: self._run_async_praise(task, praise_prompt))
+    
+    def generate_task_uncompletion_encouragement(self, task):
+        """Generate AI encouragement for task uncompletion"""
+        import asyncio
+        from PyQt6.QtCore import QTimer
+        
+        # Prepare context for AI
+        encouragement_prompt = f"""The user uncompleted a task: "{task.title}"
+
+This is not a failure - they might need to adjust priorities, or the task needs more work. 
+Please generate a brief, supportive, and encouraging message (under 50 words) that:
+- Acknowledges it's okay to uncomplete tasks
+- Offers gentle encouragement
+- Doesn't judge or criticize
+- Is warm and understanding
+
+Use emojis if appropriate, but keep it natural and supportive."""
+
+        # Use QTimer to schedule async call
+        QTimer.singleShot(0, lambda: self._run_async_encouragement(task, encouragement_prompt))
+    
+    def _run_async_praise(self, task, prompt):
+        """Helper to run async praise generation"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        if loop.is_running():
+            # If loop is running, create task
+            asyncio.create_task(self._generate_ai_praise(task, prompt))
+        else:
+            # If loop is not running, run it
+            loop.run_until_complete(self._generate_ai_praise(task, prompt))
+    
+    def _run_async_encouragement(self, task, prompt):
+        """Helper to run async encouragement generation"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        if loop.is_running():
+            # If loop is running, create task
+            asyncio.create_task(self._generate_ai_encouragement(task, prompt))
+        else:
+            # If loop is not running, run it
+            loop.run_until_complete(self._generate_ai_encouragement(task, prompt))
+    
+    async def _generate_ai_praise(self, task, prompt):
+        """Generate AI praise message"""
+        try:
+            if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
+                response = await self.anxiety_killer_widget.agent.chat(prompt, context={})
+                self.anxiety_killer_widget.send_proactive_message(response)
+        except Exception as e:
+            print(f"Error generating AI praise: {e}")
+            # Fallback to simple message
+            self.anxiety_killer_widget.send_proactive_message(
+                f"🎉 Great job completing '{task.title}'! Every step forward counts!"
+            )
+    
+    async def _generate_ai_encouragement(self, task, prompt):
+        """Generate AI encouragement message"""
+        try:
+            if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
+                response = await self.anxiety_killer_widget.agent.chat(prompt, context={})
+                self.anxiety_killer_widget.send_proactive_message(response)
+        except Exception as e:
+            print(f"Error generating AI encouragement: {e}")
+            # Fallback to simple message
+            self.anxiety_killer_widget.send_proactive_message(
+                f"💪 That's okay! You can always come back to '{task.title}' when you're ready. Take your time!"
+            )
     
     def check_todolist_completion(self, task_id: str):
         """Check if any todolist is now complete after task completion"""
@@ -739,20 +848,74 @@ class MainWindow(QMainWindow):
             
             # Check if all tasks in this todolist are completed
             all_completed = True
+            completed_tasks = []
             for tid in task_ids:
                 task = self.data_manager.get_task(tid)
-                if task and not task.completed:
-                    all_completed = False
-                    break
+                if task:
+                    if not task.completed:
+                        all_completed = False
+                        break
+                    else:
+                        completed_tasks.append(task.title)
             
             if all_completed and task_ids:  # Only if there are tasks
-                # Send celebration message
+                # Let AI generate a personalized celebration message
                 if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
-                    self.anxiety_killer_widget.send_proactive_message(
-                        f"🎊🎉 Amazing! You've completed the entire '{todolist['name']}' list! "
-                        f"You're absolutely crushing it! 🌟"
-                    )
+                    self.generate_todolist_completion_praise(todolist, completed_tasks)
                 break  # Only celebrate one at a time
+    
+    def generate_todolist_completion_praise(self, todolist, completed_tasks):
+        """Generate AI praise for todolist completion"""
+        import asyncio
+        from PyQt6.QtCore import QTimer
+        
+        # Prepare context for AI
+        tasks_list = ", ".join(completed_tasks[:5])  # First 5 tasks
+        if len(completed_tasks) > 5:
+            tasks_list += f", and {len(completed_tasks) - 5} more"
+        
+        praise_prompt = f"""The user just completed an entire todo list: "{todolist['name']}"
+
+Completed tasks: {tasks_list}
+Total tasks completed: {len(completed_tasks)}
+
+Please generate a brief, enthusiastic, and personalized celebration message (under 60 words) that:
+- Celebrates this major achievement
+- Acknowledges the effort and dedication
+- Is warm, encouraging, and genuine
+- Makes the user feel proud of their accomplishment
+
+Use emojis if appropriate, but keep it natural and heartfelt."""
+
+        # Use QTimer to schedule async call
+        QTimer.singleShot(0, lambda: self._run_async_todolist_praise(todolist, praise_prompt))
+    
+    def _run_async_todolist_praise(self, todolist, prompt):
+        """Helper to run async todolist praise generation"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        if loop.is_running():
+            asyncio.create_task(self._generate_ai_todolist_praise(todolist, prompt))
+        else:
+            loop.run_until_complete(self._generate_ai_todolist_praise(todolist, prompt))
+    
+    async def _generate_ai_todolist_praise(self, todolist, prompt):
+        """Generate AI praise message for todolist completion"""
+        try:
+            if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
+                response = await self.anxiety_killer_widget.agent.chat(prompt, context={})
+                self.anxiety_killer_widget.send_proactive_message(response)
+        except Exception as e:
+            print(f"Error generating AI todolist praise: {e}")
+            # Fallback to simple message
+            self.anxiety_killer_widget.send_proactive_message(
+                f"🎊🎉 Amazing! You've completed the entire '{todolist['name']}' list! You're absolutely crushing it! 🌟"
+            )
     
     def on_task_deleted(self, task_id: str):
         """Handle task deletion - refresh all todolists"""
@@ -782,8 +945,12 @@ class MainWindow(QMainWindow):
                 )
     
     def request_diary_summary(self, date: str, content: str):
-        """Request AI summary for diary entry - summarizes user's activities and conversations"""
+        """Request AI summary for diary entry - summarizes diary content, chats, and activities"""
         if self.anxiety_killer_widget and self.anxiety_killer_widget.agent:
+            # Get today's diary entry
+            diary_entry = self.data_manager.get_diary_entry(date)
+            diary_content = diary_entry.content if diary_entry and diary_entry.content else ""
+            
             # Get today's chat history from both agents
             anxiety_killer_chats = self.data_manager.get_chat_history("anxiety_killer", date)
             ask_me_chats = self.data_manager.get_chat_history("ask_me", date)
@@ -805,8 +972,14 @@ class MainWindow(QMainWindow):
                 if todolist.get("created_at", "").startswith(date):
                     todolist_operations.append(f"Created todolist: {todolist.get('name', '')}")
             
-            # Build simplified summary context focusing on user's activities
-            summary_context = f"User's activities on {date}:\n\n"
+            # Build summary context including diary content and chats
+            summary_context = f"User's day on {date}:\n\n"
+            
+            # Add diary content (most important)
+            if diary_content:
+                summary_context += f"Diary entry:\n{diary_content}\n\n"
+            else:
+                summary_context += "Diary entry: (No diary content written today)\n\n"
             
             # Add completed tasks
             if completed_today:
@@ -819,11 +992,11 @@ class MainWindow(QMainWindow):
                 summary_context += "Anxiety Killer conversations:\n"
                 for msg in anxiety_killer_chats:
                     role = msg.get('role', 'user')
-                    content = msg.get('content', '')[:200]  # Limit length
+                    msg_content = msg.get('content', '')[:300]  # Limit length
                     if role == 'user':
-                        summary_context += f"User: {content}\n"
+                        summary_context += f"User: {msg_content}\n"
                     elif role == 'assistant':
-                        summary_context += f"AI: {content}\n"
+                        summary_context += f"AI: {msg_content}\n"
                 summary_context += "\n"
             
             # Add Ask Me conversations
@@ -831,11 +1004,11 @@ class MainWindow(QMainWindow):
                 summary_context += "Ask Me questions and answers:\n"
                 for msg in ask_me_chats:
                     role = msg.get('role', 'user')
-                    content = msg.get('content', '')[:200]  # Limit length
+                    msg_content = msg.get('content', '')[:300]  # Limit length
                     if role == 'user':
-                        summary_context += f"User question: {content}\n"
+                        summary_context += f"User question: {msg_content}\n"
                     elif role == 'assistant':
-                        summary_context += f"AI answer: {content}\n"
+                        summary_context += f"AI answer: {msg_content}\n"
                 summary_context += "\n"
             
             # Add todolist operations
@@ -845,7 +1018,7 @@ class MainWindow(QMainWindow):
                 summary_context += "\n\n"
             
             # Add summary instruction
-            summary_context += "\nPlease create a brief, encouraging summary (under 150 words) of what the user did today, focusing on their tasks, conversations with AI, and organizational activities."
+            summary_context += "\nPlease create a brief, encouraging summary (under 150 words) that synthesizes the user's diary entry, completed tasks, conversations with AI, and activities. Focus on understanding the user's emotional state, achievements, and overall day experience."
             
             # Show message
             self.anxiety_killer_widget.add_system_message(

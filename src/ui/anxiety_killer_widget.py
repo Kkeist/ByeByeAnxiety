@@ -202,12 +202,22 @@ class AnxietyKillerWidget(QWidget):
                     }
                 elif mention_data['type'] == 'person':
                     person = mention_data['data']
+                    # Get full person information from social book
+                    full_person = self.data_manager.get_person(person.id)
+                    if full_person:
+                        person = full_person
+                    
                     context['mentions'][mention_key] = {
                         'type': 'person',
                         'name': person.name,
                         'id': person.id,
-                        'birthday': getattr(person, 'birthday', None),
-                        'notes': getattr(person, 'notes', '')
+                        'personal_info': person.personal_info if hasattr(person, 'personal_info') else '',
+                        'birthday': person.birthday if hasattr(person, 'birthday') else None,
+                        'birthday_reminder': person.birthday_reminder if hasattr(person, 'birthday_reminder') else False,
+                        'preferences': person.preferences if hasattr(person, 'preferences') else '',
+                        'events': person.events if hasattr(person, 'events') else [],
+                        'notes': person.notes if hasattr(person, 'notes') else '',
+                        'custom_fields': person.custom_fields if hasattr(person, 'custom_fields') else {}
                     }
                 elif mention_data['type'] == 'diary':
                     date = mention_data['data']

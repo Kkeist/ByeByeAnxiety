@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QListWidget, QListWidgetItem, QCheckBox, QLabel,
                              QDialog, QLineEdit, QTextEdit, QComboBox, QDateEdit,
                              QDialogButtonBox, QMessageBox)
-from PyQt6.QtCore import Qt, pyqtSignal, QDate, QMimeData
+from PyQt6.QtCore import Qt, pyqtSignal, QDate, QMimeData, QLocale
 from PyQt6.QtGui import QDrag
 from datetime import datetime
 
@@ -56,6 +56,7 @@ class TaskDialog(QDialog):
         self.start_date.setCalendarPopup(True)
         self.start_date.setDate(QDate.currentDate())
         self.start_date.setEnabled(False)  # Disabled by default
+        self.start_date.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         start_date_layout.addWidget(self.start_date)
         layout.addLayout(start_date_layout)
         
@@ -64,6 +65,7 @@ class TaskDialog(QDialog):
         self.due_date = QDateEdit()
         self.due_date.setCalendarPopup(True)
         self.due_date.setDate(QDate.currentDate())
+        self.due_date.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedStates))
         # When due date changes, update start date to match if they're the same
         self.due_date.dateChanged.connect(self.on_due_date_changed)
         layout.addWidget(self.due_date)
@@ -299,6 +301,7 @@ class TodoWidget(QWidget):
         """Add a draggable task item to the layout"""
         task_item = DraggableTaskItem(task)
         task_item.task_completed.connect(self.on_task_completed)
+        task_item.task_uncompleted.connect(self.on_task_uncompleted)
         task_item.task_clicked.connect(self.edit_task_by_id)
         
         # Store task reference for reordering
@@ -395,6 +398,13 @@ class TodoWidget(QWidget):
         if task:
             self.data_manager.save_task(task)
             self.task_completed.emit(task_id)
+    
+    def on_task_uncompleted(self, task_id: str):
+        """Handle task uncompletion"""
+        task = self.data_manager.get_task(task_id)
+        if task:
+            self.data_manager.save_task(task)
+            self.task_uncompleted.emit(task_id)
     
     def edit_task_by_id(self, task_id: str):
         """Edit task by ID"""
